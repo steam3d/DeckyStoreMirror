@@ -17,11 +17,13 @@ class Store:
         self.last_update = datetime.now(timezone.utc)
         self.thread = None
 
-        self.server_images_url=r"https://justtype.ru/images/"
-        self.server_plugins_url=r"https://justtype.ru/plugins/"
-
         self.site_dir = os.path.join(os.path.dirname(__file__), "data")
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "data")
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "tmp")
+
+        self.server = r"https://justtype.ru/"
+        self.decky_stable = r"https://plugins.deckbrew.xyz/plugins"
+        self.decky_testing = r"https://testing.deckbrew.xyz/plugins"
+        self.decky_plugins= r"https://cdn.tzatzikiweeb.moe/file/steam-deck-homebrew/versions/{}.zip"
 
     def _update_image(self, url:str, new_url:str, dir):
         response = requests.get(url)
@@ -64,47 +66,35 @@ class Store:
         return f"{new_url}/pluigns/{hash}{ext}"
     
     def _update_stable_store(self, dir):
-        stable_dir = os.path.join(dir, "stable")
-        os.makedirs(stable_dir, exist_ok=True)
-        plugins_url= r"https://cdn.tzatzikiweeb.moe/file/steam-deck-homebrew/versions/{}.zip"
-        url = r"https://plugins.deckbrew.xyz/plugins"
-        new_url = r"https://justtype.ru/stable/"
-        response = requests.get(url)
-        data = response.json()
-
-        for plugin in data:                
-            plugin["image_url"] = self._update_image(plugin["image_url"], new_url, stable_dir)
-            for version in plugin["versions"]:
-                version["hash"] = self._update_plugin(plugins_url, new_url, version["hash"], stable_dir)
-    
-        path = os.path.join(stable_dir, "plugins.json")
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        logger.info(f"Json saved: {path}")
+        self._update_store(self.decky_stable, dir, "stable")        
 
     def _update_testing_store(self, dir):
-        stable_dir = os.path.join(dir, "testing")
-        os.makedirs(stable_dir, exist_ok=True)
-        plugins_url= r"https://cdn.tzatzikiweeb.moe/file/steam-deck-homebrew/versions/{}.zip"
-        url = r"https://testing.deckbrew.xyz/plugins"
-        new_url = r"https://justtype.ru/testing/"
-        response = requests.get(url)
-        data = response.json()
+        self._update_store(self.decky_testing, dir, "testing")
+
+    def _update_store(self, url, base_dir, tag):
+        logger.info(f"Start update {tag}")
+
+        dir = os.path.join(base_dir, tag)
+        os.makedirs(dir, exist_ok=True)        
+        new_url = f"{self.server}/{tag}"
+        data = requests.get(url).json()        
 
         for plugin in data:                
-            plugin["image_url"] = self._update_image(plugin["image_url"], new_url, stable_dir)
+            plugin["image_url"] = self._update_image(plugin["image_url"], new_url, dir)
             for version in plugin["versions"]:
-                version["hash"] = self._update_plugin(plugins_url, new_url, version["hash"], stable_dir)
+                version["hash"] = self._update_plugin(self.decky_plugins, new_url, version["hash"], dir)
     
-        path = os.path.join(stable_dir, "plugins.json")
+        path = os.path.join(dir, "plugins.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
         logger.info(f"Json saved: {path}")
+        
+        logger.info(f"End update {tag}")
 
     def _update(self, dir):        
         if (not self.updating):
             self.updating = True
-            #self._update_stable_store(dir)
+            self._update_stable_store(dir)
             self._update_testing_store(dir)
             self.last_update = datetime.now(timezone.utc)
             self.updating = False
