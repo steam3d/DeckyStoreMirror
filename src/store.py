@@ -25,9 +25,31 @@ class Store:
         self.decky_testing = r"https://testing.deckbrew.xyz/plugins"
         self.decky_plugins= r"https://cdn.tzatzikiweeb.moe/file/steam-deck-homebrew/versions/{}.zip"
 
+    
+    def _update_file(self, url:str, new_url:str, dir):
+        name, ext = os.path.splitext(url.split("/")[-1])
+                
+        content_dir = os.path.join(dir, "content")
+        os.makedirs(content_dir, exist_ok=True)
+
+        if ext == ".zip" and os.path.exists(os.path.join(content_dir, f"{name}{ext}")):
+            return f"{new_url}/content/{name}{ext}"
+        
+        data = requests.get(url).content
+        hash = hashlib.sha256(data).hexdigest()
+        file_path = os.path.join(content_dir, f"{hash}{ext}")
+
+        if not os.path.exists(file_path):
+            with open(file_path, "wb") as f:
+                f.write(data)
+            logger.info(f"File saved: {file_path}")
+        else:
+            logger.info(f"File exist: {file_path}")
+
+        return f"{new_url}/content/{hash}{ext}"        
+    
     def _update_image(self, url:str, new_url:str, dir):
-        response = requests.get(url)
-        data = response.content
+        data = requests.get(url).content        
 
         name, ext = os.path.splitext(url.split("/")[-1])
         hash = hashlib.sha256(data).hexdigest()
@@ -53,23 +75,16 @@ class Store:
 
         plugin_path = os.path.join(plugins_dir, f"{hash}{ext}")
 
-        if not os.path.exists(plugin_path):
-            url = url.format(hash)
-            response = requests.get(url)
-            data = response.content
+        if not os.path.exists(plugin_path):            
+            data = requests.get(url.format(hash)).content
+
             with open(plugin_path, "wb") as f:
                 f.write(data)
             logger.info(f"Plugin saved: {plugin_path}")
         else:
             logger.info(f"Plugin exist: {plugin_path}")
 
-        return f"{new_url}/pluigns/{hash}{ext}"
-    
-    def _update_stable_store(self, dir):
-        self._update_store(self.decky_stable, dir, "stable")        
-
-    def _update_testing_store(self, dir):
-        self._update_store(self.decky_testing, dir, "testing")
+        return f"{new_url}/plugins/{hash}{ext}"
 
     def _update_store(self, url, base_dir, tag):
         logger.info(f"Start update {tag}")
@@ -80,9 +95,9 @@ class Store:
         data = requests.get(url).json()        
 
         for plugin in data:                
-            plugin["image_url"] = self._update_image(plugin["image_url"], new_url, dir)
+            plugin["image_url"] = self._update_file(plugin["image_url"], new_url, dir)
             for version in plugin["versions"]:
-                version["hash"] = self._update_plugin(self.decky_plugins, new_url, version["hash"], dir)
+                version["artifact"] = self._update_file(self.decky_plugins.format(version["hash"]), new_url, dir)
     
         path = os.path.join(dir, "plugins.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -94,8 +109,8 @@ class Store:
     def _update(self, dir):        
         if (not self.updating):
             self.updating = True
-            self._update_stable_store(dir)
-            self._update_testing_store(dir)
+            self._update_store(self.decky_stable, dir, "stable")   
+            self._update_store(self.decky_testing, dir, "testing")
             self.last_update = datetime.now(timezone.utc)
             self.updating = False
         else:
