@@ -19,8 +19,11 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-dataPath = os.path.join(os.path.dirname(__file__), "data")
-sitePath = os.path.join(os.path.dirname(__file__), "site")
+#dataPath = os.path.join(os.path.dirname(__file__), "data")
+#sitePath = os.path.join(os.path.dirname(__file__), "site")
+
+dataPath = "/data"
+sitePath = "/site"
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
