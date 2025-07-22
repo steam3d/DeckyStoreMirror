@@ -6,17 +6,11 @@ from logging.handlers import RotatingFileHandler
 from store import Store
 from typing import Optional, Tuple
 from datetime import timedelta
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, MaybeInaccessibleMessage, Message, ShippingOption, Update, User
+from telegram import CallbackQuery, MaybeInaccessibleMessage, Message, Update, User
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
-    MessageHandler,
-    PreCheckoutQueryHandler,
-    ShippingQueryHandler,
-    filters,
-    ConversationHandler,
-    CallbackQueryHandler,
 )
 
 #dataPath = os.path.join(os.path.dirname(__file__), "data")

@@ -5,7 +5,6 @@ import json
 import hashlib
 import os
 import threading
-import time
 import shutil
 import tempfile
 from datetime import datetime, timezone, timedelta
