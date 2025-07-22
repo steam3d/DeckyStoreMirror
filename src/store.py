@@ -14,12 +14,12 @@ logger = logging.getLogger("main")
 
 class Store:
     def __init__(self, server, site_dir):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "tmp") #For Windows testing
-        self.updating = False
+        #self.tmp_dir = os.path.join(os.path.dirname(__file__), "tmp") #For Windows testing
         self.stop_event = threading.Event()
         self.last_update = datetime.now(timezone.utc)
         self.next_update = datetime.now(timezone.utc)
         self.thread = None
+        self.lock = threading.Lock()
 
         self.site_dir = site_dir
         self.server = server
@@ -73,26 +73,25 @@ class Store:
         logger.info(f"End update {tag}")
 
     def _update(self, dir):
-        if (not self.updating):
-            self.updating = True
             self._update_store(self.decky_stable, dir, "stable")
             self._update_store(self.decky_testing, dir, "testing")
             self.last_update = datetime.now(timezone.utc)
-            self.updating = False
-        else:
-            logger.error("Update is already in process.")
+            self.next_update = datetime.now(timezone.utc) + timedelta(hours=24)
 
     def _background_worker(self):
-        while not self.stop_event.is_set():
-            self.next_update = datetime.now(timezone.utc) + timedelta(hours=24)
-            #for _ in range(24 * 60 * 60):            
-            for _ in range(60):
-                if self.stop_event.is_set():
-                    logger.error("Thread stopped")
-                    return
-                time.sleep(1)
+        self.hard_reset_update()
 
-            self._update(self.site_dir)
+        while not self.stop_event.is_set():
+            now = datetime.now(timezone.utc)
+
+            if now >= self.next_update:
+                logger.info("Starting scheduled update")
+                self.manual_update()
+                logger.info(f"Next update scheduled at {self.next_update}")
+
+            if self.stop_event.wait(timeout=1):
+                logger.info("Thread stopped")
+                return
 
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -112,19 +111,31 @@ class Store:
             logger.info("Thread stopped")
 
     def manual_update(self):
-        self._update(self.site_dir)
+        if not self.lock.acquire(blocking=False):
+            logger.warning("Update is already in progress — skipping manual_update")
+            return
+        try:
+            self._update(self.site_dir)
+        finally:
+            self.lock.release()
 
-    def hard_reset_update(self):        
-        #with tempfile.TemporaryDirectory(dir='/tmp') as tmpdir:
-        with tempfile.TemporaryDirectory(dir=self.tmp_dir) as tmpdir:
-            self._update(tmpdir)
-            self._delete_files(self.site_dir)
-            self._copy_files(tmpdir, self.site_dir)            
-        
+    def hard_reset_update(self):
+        if not self.lock.acquire(blocking=False):
+            logger.warning("Update is already in progress — skipping hard_reset_update")
+            return
+        try:
+            #with tempfile.TemporaryDirectory(dir=self.tmp_dir) as tmpdir:
+            with tempfile.TemporaryDirectory(dir='/tmp') as tmpdir:
+                self._update(tmpdir)
+                self._delete_files(self.site_dir)
+                self._copy_files(tmpdir, self.site_dir)
+        finally:
+            self.lock.release()
+
     def _delete_files(self, dir):
         if not os.path.exists(dir):
             return
-        
+
         for filename in os.listdir(dir):
             file_path = os.path.join(dir, filename)
             if os.path.isfile(file_path) or os.path.islink(file_path):
